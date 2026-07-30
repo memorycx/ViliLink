@@ -3,7 +3,7 @@ import time
 import websockets
 import json
 from datetime import datetime
-from config import config, BASE_DIR
+from common.Config import config, BASE_DIR
 from repair.repair_message import repair
 import threading
 from collections import defaultdict
@@ -14,37 +14,13 @@ URL_WEBSOCKET, IS_LISTEN = config.URL_WEBSOCKET, config.IS_LISTEN
 _file_locks = defaultdict(threading.Lock)
 _dict_lock = threading.Lock()
 
-SAVE_THRESHOLD = 30  # 每积攒 30 条存一次
-SAVE_INTERVAL = 10  # 或者每 60 秒存一次（防止消息太少一直不存）
+message_queue = asyncio.Queue()
+
+SAVE_THRESHOLD = 1024
+SAVE_INTERVAL = 10
 
 buffer = []
 last_save_time = time.time()
-
-
-async def flush_to_disk(log_func):
-    """将缓冲区数据写入物理文件"""
-    global buffer, last_save_time
-    if not buffer:
-        return
-
-    try:
-        for data in buffer:
-            # if data["message"][0]["type"] == "image":
-            #     _save_temp(data)
-
-            if data["message"][0]["type"] == "text" or data["raw_message"].startswith("[CQ:reply"):
-
-                if "异常" in data["raw_message"]:
-                    repair(data, log_func)
-
-            _save_temp(data)
-
-        log_func(f"--- 已自动存档 {len(buffer)} 条记录 ---", level="SUCCESS")
-        buffer.clear()
-        last_save_time = time.time()
-
-    except Exception as e:
-        log_func(f"保存失败: {e}", level="ERROR")
 
 
 def get_file_lock(file_path):
@@ -90,38 +66,75 @@ def _save_temp(data_text):
             f.write(json.dumps(data_text, ensure_ascii=False) + "\n")
 
 
-async def listen_messages(log_func):
-
+async def save_batch(batch, log_func):
     try:
-        async with websockets.connect(URL_WEBSOCKET) as websocket:
 
-            log_func(f"[{datetime.now().strftime('%H:%M:%S')}] 成功连接到 NapCat 消息流！")
-            while IS_LISTEN:
+        for data in batch:
 
+            if data["message"][0]["type"] == "text" or data["raw_message"].startswith("[CQ:reply"):
 
+                if "异常" in data["raw_message"]:
+                    await asyncio.to_thread(repair, data, log_func)
 
-                raw_data = await websocket.recv()
-                data = json.loads(raw_data)
-                should_write = True
+            await asyncio.to_thread(_save_temp, data)
 
-                if time.time() - last_save_time > SAVE_INTERVAL:
-                    await flush_to_disk(log_func)
-
-                try:
-                    first_key = next(iter(data.keys()), None)
-                    if first_key == "time" or "group_id" not in data:
-                        should_write = False
-                except json.JSONDecodeError:
-                    # 如果解析失败，这个消息暂时先丢掉
-                    pass
-
-                if should_write:
-                    buffer.append(data)
-                    log_func(data)
-
-                    if len(buffer) >= SAVE_THRESHOLD:
-                        await flush_to_disk(log_func)
+        log_func(f"--- 已自动存档 {len(batch)} 条记录 ---")
 
     except Exception as e:
-        log_func(f"连接异常: {e}，5秒后自动重连...")
-        await asyncio.sleep(5)
+
+        log_func(
+            f"保存失败: {e}",
+            level="ERROR"
+        )
+
+
+async def writer_worker(log_func):
+    batch = []
+
+    while True:
+
+        try:
+            data = await asyncio.wait_for(message_queue.get(), timeout=SAVE_INTERVAL)
+            batch.append(data)
+
+            if len(batch) >= SAVE_THRESHOLD:
+                await save_batch(batch, log_func)
+                batch.clear()
+
+        except asyncio.TimeoutError:
+
+            if batch:
+                await save_batch(batch, log_func)
+                batch.clear()
+
+
+async def listen_messages(log_func):
+    while True:
+        try:
+            async with websockets.connect(URL_WEBSOCKET) as websocket:
+
+                log_func(f"[{datetime.now().strftime('%H:%M:%S')}] 成功连接到 NapCat 消息流！")
+
+                while IS_LISTEN:
+
+                    raw_data = await websocket.recv()
+                    data = json.loads(raw_data)
+
+                    try:
+                        first_key = next(iter(data.keys()), None)
+                        if first_key == "time" or "group_id" not in data:
+                            continue
+
+                    except Exception as e:
+                        log_func(f"数据格式异常: {data}，错误信息: {e}", level="ERROR")
+                        continue
+
+                    log_func(data)
+                    await message_queue.put(data)
+
+        except Exception as e:
+
+            log_func(f"连接异常: {e}，5秒后自动重连...", level="ERROR")
+            await asyncio.sleep(5)
+
+

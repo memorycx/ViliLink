@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv, set_key
 
+from utils.file_utils import FileUtils
+
 
 # 目前还需要对暴露出来的配置项的载入到程序中，测试这一步的功能
 
@@ -26,14 +28,12 @@ if env_path.exists():
 
 
 class Config:
+
     # --- 基础认证 ---
-    # TOKEN 是机器人主账号的访问令牌，用于连接 WebSocket 服务器
-    # TOKEN_SEND 是机器人主账号的访问令牌，用于发送消息
-    TOKEN_WEBSOCKET = os.getenv("TOKEN_WEBSOCKET", "")
-    TOKEN_SEND = os.getenv("TOKEN_SEND", "")
+    TOKEN_WEBSOCKET = os.getenv("TOKEN_WEBSOCKET", "Wboo6Jl0gyzf8lio")
+    TOKEN_SEND = os.getenv("TOKEN_SEND", "ihEyw4Ow7Ip5a58k")
 
     # --- 接口地址 ---
-    # 动态拼接 WebSocket 路由
     WS_BASE = os.getenv("WS_BASE_URL", "ws://127.0.0.1:3001")
     URL_WEBSOCKET = f"{WS_BASE}?access_token={TOKEN_WEBSOCKET}"
 
@@ -45,8 +45,31 @@ class Config:
 
     # --- 路径管理 ---
     # 使用 Path 对象可以更方便地处理 Windows 路径
+
+    DEFAULT_PATHS = (
+        r"C:\Users\changxin\Documents\Tencent Files\2823906719\nt_qq\nt_data\Pic\2026-06\Thumb,"
+        r"C:\Users\changxin\Documents\Tencent Files\2823906719\nt_qq\nt_data\Pic\2026-06\ThumbTemp,"
+        r"C:\Users\changxin\Documents\Tencent Files\2823906719\nt_qq\nt_data\Pic\2026-06\Ori,"
+        r"C:\Users\changxin\Documents\Tencent Files\2823906719\nt_qq\nt_data\Pic\2026-06\OriTemp"
+    )
+
     SAVE_ROOT_DIR = Path(os.getenv("SAVE_ROOT_DIR", str(BASE_DIR / "data")))
-    LOCAL_IMAGES_DIR = Path(os.getenv("LOCAL_IMAGES_DIR", ""))
+    raw_paths = os.getenv("LOCAL_IMAGES_DIR", DEFAULT_PATHS)
+
+    # 3. 解析为 Path 对象列表
+    LOCAL_IMAGES_DIR = [
+        Path(FileUtils.fix_path_ym(p.strip()))
+        for p in raw_paths.split(",")
+        if p.strip()
+    ]
+
+    LOCAL_IMAGES_DIR_LAST_MONTH = [
+        Path(FileUtils.fix_path_last_ym(p.strip()))
+        for p in raw_paths.split(",")
+        if p.strip()
+    ]
+
+
     TESSERACTS_CMD = Path(os.getenv("TESSERACTS_CMD", ""))
     REPORT_PATH = Path(os.getenv("REPORT_PATH", ""))
     FIX_PATH = Path(os.getenv("FIX_PATH", ""))

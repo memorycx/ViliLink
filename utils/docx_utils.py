@@ -27,7 +27,7 @@ def set_chinese_font(run, font_name="微软雅黑"):
     run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
 
 
-def generate_docx_report(output_path, data, image_paths, t="农村生活污水设施巡查记录表"):
+def generate_docx_report(output_path, data, t="农村生活污水设施巡查记录表"):
     doc = Document()
 
     # =========================
@@ -79,12 +79,13 @@ def generate_docx_report(output_path, data, image_paths, t="农村生活污水�
         r_v.font.size = Pt(10)
 
     # 填充基础信息
-    fill_pair(0, 0, "乡镇：", 1, data['town'])
-    fill_pair(0, 2, "日期：", 3, data['date'])
-    fill_pair(1, 0, "设施名称：", 1, data['facility_name'])
-    fill_pair(1, 2, "巡查人员：", 3, data['inspector'])
-    fill_pair(2, 0, "处理工艺：", 1, data['process'])
-    fill_pair(2, 2, "设施编号：", 3, data['facility_code'])
+    fill_pair(0, 0, "乡镇：", 1, data.town)
+    fill_pair(0, 2, "日期：", 3, data.send_time)
+    fill_pair(1, 0, "设施名称：", 1, data.facility_name)
+    fill_pair(1, 2, "巡查人员：", 3, data.user_name)
+
+    fill_pair(2, 0, "处理工艺：", 1, data.process)
+    fill_pair(2, 2, "设施编号：", 3, data.facility_code)
 
     # =========================
     # 情况记录
@@ -97,7 +98,7 @@ def generate_docx_report(output_path, data, image_paths, t="农村生活污水�
     r1.bold = True
     set_chinese_font(r1)
 
-    r2 = record_p.add_run(data['record'])
+    r2 = record_p.add_run(data.message)
     set_chinese_font(r2)
 
     r3 = record_p.add_run("\n异常：")
@@ -105,7 +106,7 @@ def generate_docx_report(output_path, data, image_paths, t="农村生活污水�
     r3.font.color.rgb = RGBColor(217, 48, 37)
     set_chinese_font(r3)
 
-    r4 = record_p.add_run(data['abnormal_status'])
+    r4 = record_p.add_run(data.abnormal_status)
     r4.bold = True
     r4.font.color.rgb = RGBColor(217, 48, 37)
     set_chinese_font(r4)
@@ -119,10 +120,9 @@ def generate_docx_report(output_path, data, image_paths, t="农村生活污水�
     photo_p.paragraph_format.line_spacing = 1.0
     photo_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-    if image_paths:
+    if data.image_path:
         count = 0
-        for img in image_paths:
-            img_path = img["image_path"]
+        for img_path in data.image_path:
             if not os.path.exists(img_path):
                 continue
 

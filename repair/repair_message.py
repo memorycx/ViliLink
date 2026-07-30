@@ -2,13 +2,14 @@
 # 按照日期建立文件
 # 通知维修师傅 --> 上报人，上报人的qq账号，上报的消息发给维修师傅
 import json
-import os
 from datetime import datetime
 
-from config import BASE_DIR, config
+from common.Config import config
 
 from repair.send_message import send_message
-from tool.tool import load_jsonl_file
+
+from utils.file_utils import FileUtils
+
 
 
 def _save_repair_message(data):
@@ -39,7 +40,7 @@ def parse_repair_message():
     :return:
     """
     file_path = config.REPORT_PATH / 'repair_message.jsonl'
-    message = load_jsonl_file(file_path)
+    message = FileUtils.load_jsonl_file(file_path)
 
     message_list = []
 

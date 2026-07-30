@@ -1,6 +1,6 @@
 import requests
 
-from config import config
+from common.Config import config
 
 URL_SEND = config.URL_SEND
 HEADERS = config.HEADERS_SEND

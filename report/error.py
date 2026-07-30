@@ -1,9 +1,8 @@
 import json
 import os
-import random
 from uuid import uuid4
 
-from config import config
+from common.Config import config
 
 
 def save_json_arrays(data_groups, save_path):

@@ -4,8 +4,8 @@ import customtkinter as ctk
 from tkinter import messagebox
 from datetime import datetime
 import threading
-from config import set_config, config, BASE_DIR
-from dataCollection.listen import listen_messages
+from common.Config import set_config, config, BASE_DIR
+from dataCollection.listen import listen_messages, writer_worker
 from repair.repair_message import parse_repair_message, delete_repair_message, delete_repair_report
 from report.error import load_json_error
 from report.merge import report
@@ -82,8 +82,8 @@ class App(ctk.CTk):
 
         # 导航按钮工厂
         self.create_nav_btn("home", "🏠  主页控制台", self.show_home)
-        self.create_nav_btn("tasks", "📂  待维修", self.show_tasks)
-        self.create_nav_btn("error", "⚠  异常数据列", self.show_error)
+        # self.create_nav_btn("tasks", "📂  待维修", self.show_tasks)
+        # self.create_nav_btn("error", "⚠  异常数据列", self.show_error)
         self.create_nav_btn("config", "⚙️  系统配置", self.show_config)
 
         # 分割线
@@ -194,12 +194,12 @@ class App(ctk.CTk):
 
         card2.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
-        card3 = self.create_task_card(
-            card_container, "合并数据", "📌",
-            "合并多人报表",
-            "合并", self.merge_data, ACCENT_COLOR
-        )
-        card3.grid(row=0, column=2, padx=10, pady=10, sticky="ew")
+        # card3 = self.create_task_card(
+        #     card_container, "合并数据", "📌",
+        #     "合并多人报表",
+        #     "合并", self.merge_data, ACCENT_COLOR
+        # )
+        # card3.grid(row=0, column=2, padx=10, pady=10, sticky="ew")
         # ====================================================
 
         #     # 日志区域
@@ -666,11 +666,20 @@ class App(ctk.CTk):
             self.listen_btn.configure(text="停止服务", fg_color="#EF4444", hover_color="#DC2626")
 
             # 3. 异步启动
+
+            async def main(log_func):
+
+                asyncio.create_task(writer_worker(log_func))
+
+                await listen_messages(log_func)
+
             def run_async_loop():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                # 注意：如果你的 listen_messages 支持通过全局变量或传入 self 来判断是否退出死循环，效果会更好
-                loop.run_until_complete(listen_messages(self.log))
+
+                loop.run_until_complete(
+                    main(self.log)
+                )
 
             threading.Thread(target=run_async_loop, daemon=True).start()
             messagebox.showinfo("提示", "监听线程已在后台启动，“生成报告”功能已锁定。")
@@ -700,8 +709,7 @@ class App(ctk.CTk):
         def run_async_loop():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            target_path = BASE_DIR / 'chat_logs'
-            loop.run_until_complete(report(target_path, self.log))
+            loop.run_until_complete(report(self.log))
 
         threading.Thread(target=run_async_loop, daemon=True).start()
         messagebox.showinfo("成功", "报表已生成并导出。")

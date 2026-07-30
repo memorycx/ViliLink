@@ -1,9 +1,10 @@
 import asyncio
 import json
+import os
 
-from config import config
+from common.Config import config
 from report.merge import report
-from tool.tool import find_files_by_partial_name
+
 
 LOCAL_IMAGES_DIR = config.LOCAL_IMAGES_DIR
 
@@ -32,7 +33,8 @@ def fix_error(text, file_path):
             end_data.append(item)
             break
         if data[0]["error_message"] == "图片异常":
-            image_path = find_files_by_partial_name(LOCAL_IMAGES_DIR, item["image_path"])
+            base_name, ext = os.path.splitext(item["image_path"])
+            image_path = find_files_by_partial_name(LOCAL_IMAGES_DIR, base_name)
             if image_path:
                 item["image_path"] = image_path
             else:

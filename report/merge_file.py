@@ -1,9 +1,7 @@
 import os
 from datetime import datetime
-from config import config
+from common.Config import config
 from docx import Document
-
-from report.generate_docx_report import generate_docx_report
 
 root_path = config.REPORT_PATH / "运维"
 
@@ -135,11 +133,19 @@ def merge_file():
     唯一向外暴露的方法，对同一日同一地点的文件进行合并处理
     :return:
     """
+    if not root_path.exists() or not root_path.is_dir():
+        print(f"错误：报表路径不存在或无效: {root_path}")
+        return
+
     for town_village_folder in os.listdir(root_path):
 
         folder_path = os.path.join(root_path, town_village_folder)
 
-        if len(os.listdir(folder_path)) == 1:
+        try:
+            if len(os.listdir(folder_path)) == 1:
+                continue
+        except (OSError, PermissionError) as e:
+            print(f"警告：无法读取目录 {folder_path}: {e}")
             continue
 
         all_data = []
@@ -148,31 +154,49 @@ def merge_file():
         for data_docx in os.listdir(folder_path):
 
             if today in data_docx:
-                tem = _read_docx_table(os.path.join(folder_path, data_docx))
-                user = data_docx.split("_")[1].split(".")[0]
-                all_data.append(tem)
+                try:
+                    tem = _read_docx_table(os.path.join(folder_path, data_docx))
+                    parts = data_docx.split("_")
+                    if len(parts) >= 2:
+                        user = parts[1].split(".")[0]
+                    else:
+                        user = "unknown"
+                    all_data.append(tem)
 
-                image_paths.extend(_extract_images_from_docx(os.path.join(folder_path, data_docx),
-                                                            os.path.join(root_path, "merge"),
-                                                            user))
+                    image_paths.extend(_extract_images_from_docx(os.path.join(folder_path, data_docx),
+                                                                 os.path.join(root_path, "merge"),
+                                                                 user))
+                except Exception as e:
+                    print(f"警告：处理文件 {data_docx} 时出错: {e}")
+                    continue
 
         if len(all_data) >= 2:
-            end_data = _merge_multiple_dicts(all_data[0], all_data[1], sep="/")
+            try:
+                end_data = _merge_multiple_dicts(all_data[0], all_data[1], sep="/")
 
-            report_data = {
-                "town": end_data["乡镇："],
-                "date": end_data["日期："],
-                "facility_name": end_data["设施名称："],
-                "inspector": end_data["巡查人员："],
-                "process": end_data["处理工艺："],
-                "facility_code": end_data["设施编号："],
-                "record": end_data["情况记录"],
-                "abnormal_status": end_data["异常"]
-            }
+                required_keys = ["乡镇：", "日期：", "设施名称：", "巡查人员：", "处理工艺：", "设施编号：", "情况记录",
+                                 "异常"]
+                if not all(key in end_data for key in required_keys):
+                    print(f"警告：合并后的数据缺少必要字段")
+                    continue
 
-            tem = end_data['巡查人员：'].replace("/", " ")
-            generate_docx_report(
-                os.path.join(folder_path, f"{tem}_{today}.docx"),
-                report_data,
-                image_paths
-            )
+                report_data = {
+                    "town": end_data["乡镇："],
+                    "date": end_data["日期："],
+                    "facility_name": end_data["设施名称："],
+                    "inspector": end_data["巡查人员："],
+                    "process": end_data["处理工艺："],
+                    "facility_code": end_data["设施编号："],
+                    "record": end_data["情况记录"],
+                    "abnormal_status": end_data["异常"]
+                }
+
+                tem = end_data['巡查人员：'].replace("/", " ")
+                generate_docx_report(
+                    os.path.join(folder_path, f"{tem}_{today}.docx"),
+                    report_data,
+                    image_paths
+                )
+            except Exception as e:
+                print(f"警告：生成合并报表时出错: {e}")
+                continue
