@@ -2,7 +2,7 @@ import os
 import traceback
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
-
+from datetime import datetime
 from common.Config import config, BASE_DIR
 from common.Packet import Packet
 from utils.docx_utils import generate_docx_report
@@ -22,13 +22,22 @@ def generate_pool(packets, log_func):
         futures = []
 
         for packet in packets:
+
+            if packet.error_code:
+                json_str = packet.to_dict()
+                file_path = config.REPORT_PATH / 'error_message'
+                file_path.mkdir(exist_ok=True)
+                FileUtils.save_jsonl_file(file_path, json_str)
+
+                log_func(f"{packet.town} 的 code为 ---> {packet.error_code} ")
+                continue
+
             future = executor.submit(
                 generate_docx,
                 packet,
                 log_func
             )
-            log_func(f"{packet.town} 的 code为 ---> {packet.error_code}")
-
+            log_func(f"{packet.town}合成成功")
             futures.append(future)
 
         for future in futures:
@@ -44,7 +53,10 @@ def generate_docx(packet, log_func):
 
     path_town = packet.town.replace(" ", "_")
 
-    report_path = config.REPORT_PATH / "运维" / f'{path_town}' / (f'{packet.send_time.strftime("%Y-%m-%d")}'
+    time = packet.send_time
+    if isinstance(time, datetime):
+        time = packet.send_time.strftime("%Y-%m-%d %H-%M-%S")
+    report_path = config.REPORT_PATH / "运维" / f'{path_town}' / (f'{time}'
                                                                   f'_{packet.user_name}.docx')
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,17 +89,16 @@ def generate_docx(packet, log_func):
         log_func(
             traceback.format_exc()
         )
-        # save_exception_to_jsonl需要重写
-
         FileUtils.save_exception_to_jsonl(config.REPORT_PATH, packet, str(e))
 
     log_func(f"报表生成成功: {report_path}", "SUCCESS")
 
 
-async def report(log_func, day=None, packages=None, is_dir=True):
+async def report(log_func, pack_utils, day=None, packages=None, is_dir=True):
     """
     生成报表，界面调用的函数
     两处调用这个函数：批量生成，单文件生成
+    :param pack_utils:
     :param day: 选择需要创建的日期，默认为当日
     :param log_func: 日志函数
     :param packages: 是否已经有打包好的数据，默认是 None
@@ -96,7 +107,6 @@ async def report(log_func, day=None, packages=None, is_dir=True):
     """
 
     chat_log_path = BASE_DIR / "chat_logs"
-    pack_utils = PackUtils()
     file_utils = FileUtils()
 
     # 需要在上流就控制好图片的日期
@@ -107,7 +117,7 @@ async def report(log_func, day=None, packages=None, is_dir=True):
         pack_utils.get_day_file_map(day)
 
         day_str = day.strftime("%Y-%m-%d")
-        message = []
+        message_list = []
         for item_name in os.listdir(chat_log_path):
 
             item_full_path = os.path.join(chat_log_path, item_name)
@@ -116,14 +126,14 @@ async def report(log_func, day=None, packages=None, is_dir=True):
                 for file in os.listdir(item_full_path):
                     file_full_path = os.path.join(item_full_path, file)
                     if day_str in file:
-                        message.extend(file_utils.load_jsonl_file(file_full_path))
-                        log_func(f"正在处理{file},聊天记录有 ---> {len(message)}")
+                        message_list.extend(file_utils.load_jsonl_file(file_full_path))
+                        log_func(f"正在处理{file},聊天记录有 ---> {len(message_list)}")
 
                     packets = []
 
-                    if message:
+                    if message_list:
                         image_name_list = []
-                        for item in message:
+                        for item in message_list:
                             if item["message"][0]["type"] == "image":
                                 image_name = item["message"][0]["data"]["file"]
                                 image_name_list.append(image_name)
@@ -133,8 +143,21 @@ async def report(log_func, day=None, packages=None, is_dir=True):
                                 user_name = item["sender"]["card"]
                                 text = item["message"][0]["data"]["text"]
                                 group_id = item["group_id"]
-                                packet = Packet(image_name_list, time, user_name, text, group_id,
-                                                pack_utils.image_cache)
+                                error_code = []
+
+                                town_name, village_name, message = PackUtils.parse_message(text, error_code)
+
+                                facility_code, facility_name, process = PackUtils.find_facility_info(
+                                    town_name, village_name
+                                )
+
+                                if not facility_code or not facility_name or not process:
+                                    error_code.append("3")
+
+                                packet = Packet(text, image_name_list, time, user_name, message, group_id, town_name,
+                                                village_name,
+                                                facility_code, facility_name, process,
+                                                pack_utils.image_cache, error_code)
 
                                 image_name_list.clear()
                                 packets.append(packet)
@@ -142,9 +165,11 @@ async def report(log_func, day=None, packages=None, is_dir=True):
                         log_func(f"正在加急生成，请等待!!!")
                         generate_pool(packets, log_func)
 
-                        message.clear()
+                        message_list.clear()
                         packets.clear()
                         log_func("该群报表全部生成完毕~")
+
+        log_func("嘿嘿嘿！全部合成完毕啦~")
 
         # 这里将今日的文件，全部写入程序内部的哈希表中
 
@@ -166,6 +191,3 @@ async def report(log_func, day=None, packages=None, is_dir=True):
     #         return
     #
     #     generate_docx(data, packages, group_id, log_func)
-
-
-

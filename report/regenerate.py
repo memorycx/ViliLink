@@ -1,10 +1,13 @@
 import asyncio
 import json
 import os
+from datetime import date
 
 from common.Config import config
-from report.merge import report
-
+from common.Packet import Packet
+from report.merge import report, generate_docx
+from utils.pack_utils import PackUtils
+from utils.file_utils import FileUtils
 
 LOCAL_IMAGES_DIR = config.LOCAL_IMAGES_DIR
 
@@ -56,24 +59,53 @@ def find_error_package(file_id):
     return file_path / f"error_message_{file_id}.jsonl"
 
 
-def re_generate_docx(data_id, text, log_func):
+def re_generate_docx(data_id, text, log_func, packet_utils, day=None):
     """
     重新生成docx文件
+    :param day:
+    :param packet_utils:
     :param log_func:
     :param data_id: 错误包的随机数
     :param text: 正确的文本
     """
 
+    if not day:
+        day = date.today()
+    packet_utils.get_day_file_map(day)
+
+    # 将基本信息格式化出来
+    error_code = []
+    town_name, village_name, message = PackUtils.parse_message(text, error_code)
+    facility_code, facility_name, process = PackUtils.find_facility_info(
+        town_name, village_name
+    )
+
+    if not facility_code or not facility_name or not process:
+        error_code.append("3")
+
+    # 实例化一个Packet对象
     file_path = find_error_package(data_id)
-    package = fix_error(text, file_path)
+    json_dict = FileUtils.load_jsonl_file(file_path)
+    if json_dict:
+        json_dict = json_dict[0]
+    packet = Packet.from_dict(json_dict)
 
-    if not package:
-        log_func("修复数据失败，请重新修改错误包")
-        return
-
-    try:
-        asyncio.run(report("", log_func, packages=package, is_dir=False))
-    except Exception as e:
-        log_func(f"重新生成docx文件失败: {e}")
+    packet.image_map = packet_utils.image_cache
+    packet.image_path = []
+    packet.find_image()
 
     file_path.unlink(missing_ok=True)
+
+    if error_code:
+        json_str = packet.to_dict()
+        file_path = config.REPORT_PATH / 'error_message'
+        file_path.mkdir(exist_ok=True)
+        FileUtils.save_jsonl_file(file_path, json_str)
+
+        log_func(f"{packet.town} 的 code为 ---> {packet.error_code} ")
+        return False
+
+    generate_docx(packet, log_func)
+    return True
+
+

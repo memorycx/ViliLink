@@ -1,7 +1,6 @@
 import sys
 import os
 from datetime import date
-import re
 import pandas as pd
 
 from common.Config import config
@@ -9,6 +8,18 @@ from common.Config import config
 
 class PackUtils:
     image_cache = {}
+
+    @staticmethod
+    def parse_message(message, error):
+
+        message_tem = message.split("，") if message else []
+        if len(message_tem) < 3:
+            error.append("1")
+            return None, None, None
+
+        message = ",".join(message_tem[2:])
+
+        return message_tem[0], message_tem[1], message
 
     @staticmethod
     def find_facility_info(town_name, village_name):
@@ -58,9 +69,12 @@ class PackUtils:
         """
 
         all_list = config.LOCAL_IMAGES_DIR
+        all_list.extend(config.LOCAL_IMAGES_DIR_LAST_MONTH)
 
         for abs_path in all_list:
             # 判断目录是否存在，不存在直接返回空字典（不抛异常）
+            if not abs_path:
+                continue
             if not os.path.isdir(abs_path):
                 return
 
@@ -84,7 +98,6 @@ class PackUtils:
                             self.image_cache[name + ext.lower()] = entry.path
 
         return
-
 
 
 if __name__ == '__main__':

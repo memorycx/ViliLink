@@ -28,7 +28,6 @@ if env_path.exists():
 
 
 class Config:
-
     # --- 基础认证 ---
     TOKEN_WEBSOCKET = os.getenv("TOKEN_WEBSOCKET", "Wboo6Jl0gyzf8lio")
     TOKEN_SEND = os.getenv("TOKEN_SEND", "ihEyw4Ow7Ip5a58k")
@@ -68,7 +67,6 @@ class Config:
         for p in raw_paths.split(",")
         if p.strip()
     ]
-
 
     TESSERACTS_CMD = Path(os.getenv("TESSERACTS_CMD", ""))
     REPORT_PATH = Path(os.getenv("REPORT_PATH", ""))

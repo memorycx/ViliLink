@@ -3,9 +3,12 @@ import os
 from pathlib import Path
 from datetime import datetime
 import random
+from uuid import uuid4
+
 from dateutil.relativedelta import relativedelta
 import re
 
+from common.Packet import Packet
 
 
 class FileUtils:
@@ -21,11 +24,42 @@ class FileUtils:
                             messages.append(json.loads(line))
                         except json.JSONDecodeError as e:
                             # 打印出到底是第几行、什么内容导致了报错
-                            print(f"JSON解析失败！文件: {file_path}, 第 {line_num} 行")
-                            print(f"错误原因: {e}")
                             print(f"该行内容前600个字符: {line[:600]}")  # 打印到错误位置附近
+                            print(f"json解析失败文件: {file_path}, 第 {line_num} 行")
+                            print(f"错误原因: {e}")
                             raise e
         return messages
+
+    @staticmethod
+    def load_error_data(dir_path):
+        """
+        加载 error_message 目录下的异常数据文件（每个文件是一份 Packet 的 JSON）
+        返回 Packet 对象列表，并为每个对象附加 file_id（来自文件名），便于重新生成时定位文件
+        """
+        error_list = []
+        if not os.path.isdir(dir_path):
+            return error_list
+
+        for file_name in os.listdir(dir_path):
+            file_path = os.path.join(dir_path, file_name)
+            if not os.path.isfile(file_path):
+                continue
+
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    json_str = f.read()
+                packet = Packet.from_json(json_str)
+            except (json.JSONDecodeError, OSError):
+                # 单个坏文件不影响整体加载
+                continue
+
+            # 从文件名提取唯一标识：error_message_{id}.jsonl -> {id}
+            stem = os.path.splitext(file_name)[0]
+            prefix = "error_message_"
+            packet.file_id = stem[len(prefix):] if stem.startswith(prefix) else stem
+            error_list.append(packet)
+
+        return error_list
 
     @staticmethod
     def save_exception_to_jsonl(report_path, data, error_msg):
@@ -89,3 +123,14 @@ class FileUtils:
         # 匹配 YYYY-MM 格式年月
         pattern = re.compile(r"20\d{2}-(0[1-9]|1[0-2])")
         return pattern.sub(target_ym, path)
+
+    @staticmethod
+    def save_jsonl_file(file_path, packet_str):
+
+        path = os.path.join(
+            file_path,
+            f"error_message_{uuid4().hex}.jsonl"
+        )
+        print(f"{path}")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(packet_str, f, ensure_ascii=False)

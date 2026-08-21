@@ -3,6 +3,8 @@ from datetime import datetime
 from common.Config import config
 from docx import Document
 
+from utils.docx_utils import generate_docx_report
+
 root_path = config.REPORT_PATH / "运维"
 
 
