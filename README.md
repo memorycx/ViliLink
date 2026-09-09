@@ -20,7 +20,6 @@
   - 峰值吞吐量，缓冲池被写满
 
 
-![./image/img.png](./image/img.png)
 
 
 
