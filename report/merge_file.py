@@ -33,7 +33,7 @@ def _clean_parse_situation(key_text):
     return result
 
 
-def _read_docx_table(docx_path):
+def read_docx_table(docx_path):
     """读取docx里的表格数据"""
     doc = Document(docx_path)
     table_data = {}
@@ -157,7 +157,7 @@ def merge_file():
 
             if today in data_docx:
                 try:
-                    tem = _read_docx_table(os.path.join(folder_path, data_docx))
+                    tem = read_docx_table(os.path.join(folder_path, data_docx))
                     parts = data_docx.split("_")
                     if len(parts) >= 2:
                         user = parts[1].split(".")[0]

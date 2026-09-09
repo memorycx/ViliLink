@@ -79,3 +79,6 @@ class Packet:
         """从 JSON 字符串读取并还原成 Packet 对象"""
         data = json.loads(json_str)
         return cls.from_dict(data)
+
+    def __str__(self):
+        return self.to_json()

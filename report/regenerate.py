@@ -86,15 +86,29 @@ def re_generate_docx(data_id, text, log_func, packet_utils, day=None):
     # 实例化一个Packet对象
     file_path = find_error_package(data_id)
     json_dict = FileUtils.load_jsonl_file(file_path)
+
     if json_dict:
         json_dict = json_dict[0]
+
     packet = Packet.from_dict(json_dict)
 
     packet.image_map = packet_utils.image_cache
-    packet.image_path = []
     packet.find_image()
 
     file_path.unlink(missing_ok=True)
+
+    packet.error_code = error_code
+    packet.all_text = text
+
+    packet.town_name = town_name
+    packet.village_name = village_name
+    packet.message = message
+
+    packet.process = process
+    packet.facility_code = facility_code
+    packet.facility_name = facility_name
+
+    packet.town = f"{packet.town_name} {packet.village_name}"
 
     if error_code:
         json_str = packet.to_dict()

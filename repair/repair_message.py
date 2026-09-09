@@ -91,7 +91,6 @@ def delete_repair_message(target_task):
                 dt = dt_object.strftime("%Y-%m-%d")
                 town, village = tem[0], tem[1]
 
-                print("走了这个逻辑")
                 if town == target_town and village == target_village and dt == target_date:
                     print(f"🔥 成功匹配并准备删除：{town}_{village} ({dt})")
                     continue

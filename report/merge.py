@@ -162,7 +162,6 @@ async def report(log_func, pack_utils, day=None, packages=None, is_dir=True):
                                 image_name_list.clear()
                                 packets.append(packet)
                         log_func(f"该群报表有 ------>  {len(packets)}条报表")
-                        log_func(f"正在加急生成，请等待!!!")
                         generate_pool(packets, log_func)
 
                         message_list.clear()

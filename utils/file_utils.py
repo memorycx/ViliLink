@@ -49,6 +49,7 @@ class FileUtils:
                 with open(file_path, "r", encoding="utf-8") as f:
                     json_str = f.read()
                 packet = Packet.from_json(json_str)
+                packet.error_code = list(set(packet.error_code))
             except (json.JSONDecodeError, OSError):
                 # 单个坏文件不影响整体加载
                 continue
@@ -106,12 +107,29 @@ class FileUtils:
 
         return report_path
 
+    # @staticmethod
+    # def fix_path_ym(path: str) -> str:
+    #     now = datetime.now()
+    #     target_ym = now.strftime("%Y-%m")
+    #     # 正则匹配 2000~2099-01~12 格式：20xx-xx
+    #     pattern = re.compile(r"20\d{2}-(0[1-9]|1[0-2])")
+    #     return pattern.sub(target_ym, path)
     @staticmethod
     def fix_path_ym(path: str) -> str:
         now = datetime.now()
-        target_ym = now.strftime("%Y-%m")
+
+        # 如果今天是1号，则使用上个月
+        if now.day == 1:
+            if now.month == 1:
+                target_ym = f"{now.year - 1}-12"
+            else:
+                target_ym = f"{now.year}-{now.month - 1:02d}"
+        else:
+            target_ym = now.strftime("%Y-%m")
+
         # 正则匹配 2000~2099-01~12 格式：20xx-xx
         pattern = re.compile(r"20\d{2}-(0[1-9]|1[0-2])")
+
         return pattern.sub(target_ym, path)
 
     @staticmethod

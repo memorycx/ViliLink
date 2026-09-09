@@ -28,6 +28,8 @@ if env_path.exists():
 
 
 class Config:
+
+    MONTH = os.getenv("MONTH", "")
     # --- 基础认证 ---
     TOKEN_WEBSOCKET = os.getenv("TOKEN_WEBSOCKET", "Wboo6Jl0gyzf8lio")
     TOKEN_SEND = os.getenv("TOKEN_SEND", "ihEyw4Ow7Ip5a58k")
@@ -57,16 +59,18 @@ class Config:
 
     # 3. 解析为 Path 对象列表
     LOCAL_IMAGES_DIR = [
-        Path(FileUtils.fix_path_ym(p.strip()))
+        Path(p.strip())
         for p in raw_paths.split(",")
         if p.strip()
     ]
 
-    LOCAL_IMAGES_DIR_LAST_MONTH = [
-        Path(FileUtils.fix_path_last_ym(p.strip()))
-        for p in raw_paths.split(",")
-        if p.strip()
-    ]
+    # LOCAL_IMAGES_DIR_LAST_MONTH = [
+    #     Path(FileUtils.fix_path_last_ym(p.strip()))
+    #     for p in raw_paths.split(",")
+    #     if p.strip()
+    # ]
+
+    ALL_IMAGES_DIR = LOCAL_IMAGES_DIR
 
     TESSERACTS_CMD = Path(os.getenv("TESSERACTS_CMD", ""))
     REPORT_PATH = Path(os.getenv("REPORT_PATH", ""))

@@ -37,7 +37,8 @@ ENV/
 .venv/
 .conda/
 .venv
-env/
+.env.dev/
+.env.pord/
 
 # 测试 & 覆盖率
 htmlcov/

@@ -29,37 +29,42 @@ class PackUtils:
         :param village_name:
         :return:
         """
-        try:
+        if town_name and village_name:
 
-            if getattr(sys, 'frozen', False):
-                # 打包后的路径：exe 所在目录
-                base_path = os.path.dirname(sys.executable)
-            else:
-                # 开发时路径：当前脚本所在目录
-                base_path = os.path.dirname(os.path.abspath(__file__))
+            try:
 
-                # 拼接文件路径
-            file_path = os.path.join(base_path, "编号集合.xlsx")
+                if getattr(sys, 'frozen', False):
+                    # 打包后的路径：exe 所在目录
+                    base_path = os.path.dirname(sys.executable)
+                else:
+                    # 开发时路径：当前脚本所在目录
+                    base_path = os.path.dirname(os.path.abspath(__file__))
 
-            df = pd.read_excel(file_path)
-            df.columns = df.columns.str.strip()
-            condition = (df['乡镇'] == town_name) & (df['自然村'] == village_name)
+                    # 拼接文件路径
+                file_path = os.path.join(base_path, "编号集合.xlsx")
 
-            result = df[condition]
+                df = pd.read_excel(file_path)
+                df.columns = df.columns.str.strip()
+                condition = (df['乡镇'] == town_name) & (df['自然村'] == village_name)
 
-            if len(result) == 1:
+                result = df[condition]
+
                 if len(result) == 1:
-                    facility_code = result.iloc[0]['设施编码']
-                    process = result.iloc[0]['处理工艺']
-                    facility_name = result.iloc[0]["设施名称"]
-                    return facility_code, facility_name, process
+                    if len(result) == 1:
+                        facility_code = result.iloc[0]['设施编码']
+                        process = result.iloc[0]['处理工艺']
+                        facility_name = result.iloc[0]["设施名称"]
+                        return facility_code, facility_name, process
 
-            else:
-                # 走上报流程，人工处理
+                else:
+                    # 走上报流程，人工处理
+                    return None, None, None
+
+            except Exception as e:
+                print(f"查找编号的时候发生错误: {e}")
                 return None, None, None
 
-        except Exception as e:
-            print(f"查找编号的时候发生错误: {e}")
+        else:
             return None, None, None
 
     def get_day_file_map(self, file_day):
@@ -68,8 +73,11 @@ class PackUtils:
         :return: dict[文件名: 文件完整路径]
         """
 
-        all_list = config.LOCAL_IMAGES_DIR
-        all_list.extend(config.LOCAL_IMAGES_DIR_LAST_MONTH)
+        all_list = config.ALL_IMAGES_DIR
+
+        print("查找的照片的所有目录如下：")
+        for list_a in all_list:
+            print(list_a)
 
         for abs_path in all_list:
             # 判断目录是否存在，不存在直接返回空字典（不抛异常）
