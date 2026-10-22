@@ -1,155 +1,158 @@
+"""报表 docx 渲染。"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
 from docx import Document
-from docx.shared import Cm, Pt
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_ROW_HEIGHT_RULE, WD_ALIGN_VERTICAL
-from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from docx.shared import RGBColor
-import os
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt, RGBColor
+
+from common.models import ReportData
+
+DEFAULT_REPORT_TITLE = "农村生活污水设施巡查记录表"
+ABNORMAL_COLOR = RGBColor(217, 48, 37)
 
 
-def set_cell_margins(cell, top=100, start=100, bottom=100, end=100):
-    """设置单元格边距"""
-    tc = cell._tc
-    tcPr = tc.get_or_add_tcPr()
-    tcMar = OxmlElement('w:tcMar')
-    for m, v in {"top": top, "start": start, "bottom": bottom, "end": end}.items():
-        node = OxmlElement(f'w:{m}')
-        node.set(qn('w:w'), str(v))
-        node.set(qn('w:type'), 'dxa')
-        tcMar.append(node)
-    tcPr.append(tcMar)
+def set_cell_margins(cell, top: int = 100, start: int = 100, bottom: int = 100, end: int = 100) -> None:
+    """设置单元格边距（单位：twip）。"""
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tc_mar = OxmlElement("w:tcMar")
+    for name, value in {"top": top, "start": start, "bottom": bottom, "end": end}.items():
+        node = OxmlElement(f"w:{name}")
+        node.set(qn("w:w"), str(value))
+        node.set(qn("w:type"), "dxa")
+        tc_mar.append(node)
+    tc_pr.append(tc_mar)
 
 
-def set_chinese_font(run, font_name="微软雅黑"):
-    """设置中文字体"""
+def set_chinese_font(run, font_name: str = "微软雅黑") -> None:
+    """同时设置西文与中文字体。"""
     run.font.name = font_name
-    run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
+    run._element.rPr.rFonts.set(qn("w:eastAsia"), font_name)
 
 
-def generate_docx_report(output_path, data, t="农村生活污水设施巡查记录表"):
-    doc = Document()
+def generate_report(
+    output_path: str | Path,
+    data: ReportData,
+    title: str = DEFAULT_REPORT_TITLE,
+) -> Path:
+    """按统一模板生成一份报表，返回实际保存路径。"""
+    output_path = Path(output_path)
+    document = Document()
 
-    # =========================
-    # 标题
-    # =========================
-    title = doc.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title.add_run(t)
+    _add_title(document, title)
+    table = _create_table(document)
+    _fill_basic_info(table, data)
+    _fill_record(table, data)
+    _fill_images(table, data.image_paths)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    document.save(str(output_path))
+    return output_path
+
+
+def _add_title(document, title: str) -> None:
+    paragraph = document.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = paragraph.add_run(str(title))
     run.bold = True
     run.font.size = Pt(22)
     set_chinese_font(run)
 
-    # =========================
-    # 创建表格
-    # =========================
-    table = doc.add_table(rows=5, cols=4)
-    table.style = 'Table Grid'
+
+def _create_table(document):
+    table = document.add_table(rows=5, cols=4)
+    table.style = "Table Grid"
     table.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # 设置列宽
     widths = [Cm(3), Cm(6), Cm(3), Cm(6)]
-    for row_idx, row in enumerate(table.rows):
-        # --- 修改点 1: 情况记录(3)和图片区(4)不使用固定高度，防止遮挡 ---
-        if row_idx < 3:
+    for row_index, row in enumerate(table.rows):
+        if row_index < 3:
             row.height = Cm(1)
             row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
         else:
-            row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST  # 至少高度，内容多会自动撑开
-            row.height = Cm(3 if row_idx == 3 else 8)
+            row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
+            row.height = Cm(3 if row_index == 3 else 8)
 
-        for idx, cell in enumerate(row.cells):
-            cell.width = widths[idx]
-            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER  # 垂直居中
+        for column_index, cell in enumerate(row.cells):
+            cell.width = widths[column_index]
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             set_cell_margins(cell)
+    return table
 
-    # 填充函数
-    def fill_pair(row_num, label_col, label, value_col, value):
-        l_cell = table.cell(row_num, label_col)
-        l_p = l_cell.paragraphs[0]
-        r_l = l_p.add_run(label)
-        set_chinese_font(r_l)
-        r_l.font.size = Pt(10)
-        r_l.font.bold = True
 
-        v_cell = table.cell(row_num, value_col)
-        v_p = v_cell.paragraphs[0]
-        r_v = v_p.add_run(str(value))
-        set_chinese_font(r_v)
-        r_v.font.size = Pt(10)
+def _fill_basic_info(table, data: ReportData) -> None:
+    _fill_pair(table, 0, 0, "乡镇：", 1, data.town)
+    _fill_pair(table, 0, 2, "日期：", 3, data.date)
+    _fill_pair(table, 1, 0, "设施名称：", 1, data.facility_name)
+    _fill_pair(table, 1, 2, "巡查人员：", 3, data.inspector)
+    _fill_pair(table, 2, 0, "处理工艺：", 1, data.process)
+    _fill_pair(table, 2, 2, "设施编号：", 3, data.facility_code)
 
-    # 填充基础信息
-    fill_pair(0, 0, "乡镇：", 1, data.town)
-    fill_pair(0, 2, "日期：", 3, data.send_time)
-    fill_pair(1, 0, "设施名称：", 1, data.facility_name)
-    fill_pair(1, 2, "巡查人员：", 3, data.user_name)
 
-    fill_pair(2, 0, "处理工艺：", 1, data.process)
-    fill_pair(2, 2, "设施编号：", 3, data.facility_code)
+def _fill_pair(table, row: int, label_column: int, label: str, value_column: int, value: object) -> None:
+    label_cell = table.cell(row, label_column)
+    label_run = label_cell.paragraphs[0].add_run(label)
+    set_chinese_font(label_run)
+    label_run.font.size = Pt(10)
+    label_run.font.bold = True
 
-    # =========================
-    # 情况记录
-    # =========================
+    value_cell = table.cell(row, value_column)
+    value_run = value_cell.paragraphs[0].add_run(str(value or ""))
+    set_chinese_font(value_run)
+    value_run.font.size = Pt(10)
+
+
+def _fill_record(table, data: ReportData) -> None:
     record_cell = table.cell(3, 0).merge(table.cell(3, 3))
-    record_p = record_cell.paragraphs[0]
+    paragraph = record_cell.paragraphs[0]
 
-    # 修改点 2: 规范换行
-    r1 = record_p.add_run("情况记录：\n")
-    r1.bold = True
-    set_chinese_font(r1)
+    label_run = paragraph.add_run("情况记录：\n")
+    label_run.bold = True
+    set_chinese_font(label_run)
 
-    r2 = record_p.add_run(data.message)
-    set_chinese_font(r2)
+    content_run = paragraph.add_run(str(data.record or ""))
+    set_chinese_font(content_run)
 
-    r3 = record_p.add_run("\n异常：")
-    r3.bold = True
-    r3.font.color.rgb = RGBColor(217, 48, 37)
-    set_chinese_font(r3)
+    abnormal_label = paragraph.add_run("\n异常：")
+    abnormal_label.bold = True
+    abnormal_label.font.color.rgb = ABNORMAL_COLOR
+    set_chinese_font(abnormal_label)
 
-    r4 = record_p.add_run(data.abnormal_status)
-    r4.bold = True
-    r4.font.color.rgb = RGBColor(217, 48, 37)
-    set_chinese_font(r4)
+    abnormal_value = paragraph.add_run(str(data.abnormal_status or ""))
+    abnormal_value.bold = True
+    abnormal_value.font.color.rgb = ABNORMAL_COLOR
+    set_chinese_font(abnormal_value)
 
-    # =========================
-    # 图片区域
-    # =========================
-    photo_area = table.cell(4, 0).merge(table.cell(4, 3))
-    # 修改点 3: 强制单倍行距，防止图片被行间距遮挡
-    photo_p = photo_area.paragraphs[0]
-    photo_p.paragraph_format.line_spacing = 1.0
-    photo_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-    if data.image_path:
-        count = 0
-        for img_path in data.image_path:
-            if not os.path.exists(img_path):
-                continue
+def _fill_images(table, image_paths: list[str]) -> None:
+    photo_cell = table.cell(4, 0).merge(table.cell(4, 3))
+    paragraph = photo_cell.paragraphs[0]
+    paragraph.paragraph_format.line_spacing = 1.0
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-            try:
-                run = photo_p.add_run()
-                # 修改点 4: 稍微调小一点宽度（如6.5cm），确保两张图+间距不会挤到下一行
-                run.add_picture(img_path, width=Cm(7))
+    added = 0
+    for raw_path in image_paths:
+        path = Path(raw_path)
+        if not path.is_file():
+            continue
+        try:
+            run = paragraph.add_run()
+            run.add_picture(str(path), width=Cm(7))
+        except Exception:
+            continue
 
-                count += 1
-                if count % 2 == 0:
-                    photo_p.add_run("\n")  # 满两张换行
-                else:
-                    photo_p.add_run("   ")  # 图片间的间距
+        added += 1
+        if added % 2 == 0:
+            paragraph.add_run("\n")
+        else:
+            paragraph.add_run("   ")
 
-            except Exception as e:
-                print(f"加载失败: {e}")
-    else:
-        # 占位符
-        run = photo_p.add_run("\n\n           （暂无照片）")
-        run.bold = True
-        set_chinese_font(run)
-
-    # =========================
-    # 保存
-    # =========================
-
-    folder_path = os.path.dirname(output_path)  # 提取文件夹路径
-    os.makedirs(folder_path, exist_ok=True)  # 自动创建，不存在就建，存在就跳过
-
-    doc.save(output_path)
+    if added == 0:
+        placeholder = paragraph.add_run("\n\n           （暂无照片）")
+        placeholder.bold = True
+        set_chinese_font(placeholder)

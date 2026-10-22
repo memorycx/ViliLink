@@ -1,5 +1,10 @@
-from tk import App
+from ui.app import App
 
-if __name__ == "__main__":
+
+def main() -> None:
     app = App()
     app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
